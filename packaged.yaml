@@ -1,0 +1,103 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Serverless Application Model - Python Application
+Transform: AWS::Serverless-2016-10-31
+Parameters:
+  Environment:
+    Description: Name of the environment to deploy to
+    Default: dev
+    Type: String
+  AppVersion:
+    Description: Version of the application
+    Default: v1
+    Type: String
+Globals:
+  Function:
+    Timeout: 3
+    Runtime: python3.6
+    Environment:
+      Variables:
+        APP_VERSION:
+          Ref: AppVersion
+Resources:
+  ServerlessApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: ServerlessApi
+      StageName:
+        Ref: Environment
+  ServerlessFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://akshayserverless/6f3dbc45b8bca2f8c9dea02d3e6c2060
+      Handler: app.serverless
+      AutoPublishAlias: live
+      DeploymentPreference:
+        Type: Canary10Percent5Minutes
+        Hooks:
+          PreTraffic:
+            Ref: PreTrafficHookFunction
+          PostTraffic:
+            Ref: PostTrafficHookFunction
+      Events:
+        Serverless:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ServerlessApi
+            Path: /serverless
+            Method: get
+  PreTrafficHookFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://akshayserverless/6f3dbc45b8bca2f8c9dea02d3e6c2060
+      Role: arn:aws:iam::150314673138:role/LambdaExecution
+      Handler: test_handler.test_pre_traffic
+      FunctionName: CodeDeployHook_preTrafficHook
+      DeploymentPreference:
+        Enabled: false
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - codedeploy:PutLifecycleEventHookExecutionStatus
+          Resource: '*'
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - lambda:InvokeFunction
+          Resource:
+            Ref: ServerlessFunction.Version
+      Environment:
+        Variables:
+          CurrentFunctionVersion:
+            Ref: ServerlessFunction.Version
+  PostTrafficHookFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://akshayserverless/6f3dbc45b8bca2f8c9dea02d3e6c2060
+      Handler: test_handler.test_post_traffic
+      Role: arn:aws:iam::150314673138:role/LambdaExecution
+      FunctionName: CodeDeployHook_postTrafficHook
+      DeploymentPreference:
+        Enabled: false
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - codedeploy:PutLifecycleEventHookExecutionStatus
+          Resource: '*'
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - lambda:InvokeFunction
+          Resource:
+            Ref: Serverless.Version
+Outputs:
+  ServerlessApi:
+    Description: API Gateway endpoint URL for the Serverless function
+    Value:
+      Fn::Sub: https://${ServerlessApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/serverless/
